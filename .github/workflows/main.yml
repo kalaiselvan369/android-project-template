@@ -4,9 +4,7 @@ name: CI
 
 # Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
-  push:
-    branches: [ main ]
+  # Triggers the workflow pull request events but only for the main branch
   pull_request:
     branches: [ main ]
 
@@ -28,20 +26,35 @@ jobs:
       - name: Unit tests
         run: bash ./gradlew test --stacktrace
 
-  apk:
-    name: Generate APK
+  distribution:
+    name: Run tests using fastlane
     runs-on: ubuntu-18.04
 
     steps:
-      - uses: actions/checkout@v1
-      - name: set up JDK 1.8
-        uses: actions/setup-java@v1
+      - uses: actions/checkout@v2
+      # Setting up ruby on the machine
+      - name: Set up Ruby
+        id: set_up_ruby
+        uses: ruby/setup-ruby@v1
         with:
-          java-version: 1.8
-      - name: Build debug APK
-        run: bash ./gradlew assembleDebug --stacktrace
-      - name: Upload APK
-        uses: actions/upload-artifact@v1
+          ruby-version: '2.7'
+          bundler-cache: true
+      # Gem caching
+      - name: Gem caching
+        id: gem_cache
+        uses: actions/cache@v2
+        continue-on-error: true
         with:
-          name: app
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+      # Installing bundler to use fastlane on the machine
+      - name: Setup fastlane
+        id: set_up_fastlane
+        run: |
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+      # run test
+      - name: Fastlane tests
+        run: bundle exec fastlane test
